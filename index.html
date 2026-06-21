@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="description" content="GIOVANI Trade Desk — position sizer, risk calculator, daily circuit breaker, and trade journal. Built, not bought.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GIO DESK">
+<title>GIOVANI // DESK</title>
+
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./favicon-64.png" sizes="64x64" type="image/png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* accent swap: change --accent (amber #ffb000 → green #00e676) */
+  :root{
+    --bg:#0a0a0a; --bg-raise:#101010; --bg-raise2:#15130d; --bg-input:#0d0d0c;
+    --line:#1e1d1a; --line-lit:#2c2a24;
+    --text:#d6d3c8; --dim:#8a877d; --faint:#56544c;
+    --accent:#ffb000; --accent-soft:rgba(255,176,0,.12);
+    --pos:#4ec9a8; --neg:#e5534b;            /* P&L signal greens/reds (functional only) */
+    --mono:'IBM Plex Mono','SFMono-Regular','SF Mono','Courier New',monospace;
+    --pad:18px; --maxw:680px;
+  }
+  *,*::before,*::after{ box-sizing:border-box; }
+  a,button,input,select{ border-radius:0; font-family:inherit; }
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--mono); font-size:14px; line-height:1.55; letter-spacing:.01em;
+    -webkit-font-smoothing:antialiased; padding-bottom:env(safe-area-inset-bottom);
+    overflow-x:hidden;
+  }
+  body::after{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:60;
+    background:repeating-linear-gradient(to bottom,rgba(255,255,255,.02) 0 1px,transparent 1px 3px);
+  }
+  ::selection{ background:var(--accent); color:#0a0a0a; }
+  .wrap{ max-width:var(--maxw); margin:0 auto; }
+
+  /* ---------- command bar ---------- */
+  .cmd{ position:sticky; top:0; z-index:40; background:var(--bg); border-bottom:1px solid var(--line); }
+  .cmd-in{ max-width:var(--maxw); margin:0 auto; padding:9px var(--pad); display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:12px; }
+  .brand{ font-weight:700; letter-spacing:.02em; color:var(--text); white-space:nowrap; }
+  .brand .c{ color:var(--accent); }
+  .cmd-right{ display:flex; align-items:center; gap:10px; color:var(--dim); white-space:nowrap; }
+  #clock{ color:var(--text); font-variant-numeric:tabular-nums; font-size:11px; }
+  .pill{ display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border:1px solid var(--line-lit); font-size:10.5px; letter-spacing:.14em; color:var(--accent); }
+  .pill .sq{ width:7px; height:7px; background:var(--accent); display:inline-block; animation:pulse 1.7s steps(12) infinite; }
+  .pill.lock{ color:var(--neg); border-color:var(--neg); }
+  .pill.lock .sq{ background:var(--neg); animation:none; }
+
+  /* ---------- live ticker (session readout) ---------- */
+  .tape{ border-bottom:1px solid var(--line); overflow:hidden; white-space:nowrap; font-size:11px; letter-spacing:.12em; color:var(--faint); padding:6px 0; text-transform:uppercase; }
+  .tape-in{ max-width:var(--maxw); margin:0 auto; padding:0 var(--pad); display:flex; gap:0; flex-wrap:nowrap; }
+  .tape b{ color:var(--dim); font-weight:500; }
+  .tape .v{ color:var(--text); }
+  .tape .d{ color:var(--accent); padding:0 .8em; }
+  .tape .pos{ color:var(--pos); } .tape .neg{ color:var(--neg); }
+
+  /* ---------- tabs ---------- */
+  nav.tabs{ position:sticky; top:39px; z-index:30; background:var(--bg); border-bottom:1px solid var(--line); }
+  .tabs-in{ max-width:var(--maxw); margin:0 auto; display:flex; }
+  .tab{ flex:1; background:none; border:0; border-right:1px solid var(--line); color:var(--dim); font-size:11px; letter-spacing:.12em; padding:11px 4px; cursor:pointer; text-transform:uppercase; transition:color .12s,background .12s; }
+  .tab:last-child{ border-right:0; }
+  .tab[aria-selected="true"]{ color:var(--accent); background:var(--bg-raise2); box-shadow:inset 0 -2px 0 var(--accent); }
+  .tab:hover{ color:var(--text); }
+
+  /* ---------- view shell ---------- */
+  main{ max-width:var(--maxw); margin:0 auto; padding:var(--pad); }
+  .eyebrow{ font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); font-weight:600; margin:0 0 4px; }
+  .sub{ font-size:11.5px; color:var(--faint); margin:0 0 16px; letter-spacing:.04em; }
+  .blockhead{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; }
+
+  /* ---------- forms ---------- */
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .field{ display:flex; flex-direction:column; gap:5px; margin-bottom:10px; }
+  label{ font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); }
+  input,select{ background:var(--bg-input); border:1px solid var(--line); color:var(--text); padding:10px 11px; font-size:14px; width:100%; outline:none; transition:border-color .12s,background .12s; }
+  input:focus,select:focus{ border-color:var(--accent); background:#0f0e0b; }
+  input::placeholder{ color:var(--faint); }
+  select{ -webkit-appearance:none; appearance:none; background-image:linear-gradient(45deg,transparent 50%,var(--dim) 50%),linear-gradient(135deg,var(--dim) 50%,transparent 50%); background-position:calc(100% - 16px) center,calc(100% - 11px) center; background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-right:30px; }
+  .seg{ display:flex; border:1px solid var(--line); }
+  .seg button{ flex:1; background:none; border:0; color:var(--dim); padding:9px; font-size:11px; letter-spacing:.14em; cursor:pointer; border-right:1px solid var(--line); }
+  .seg button:last-child{ border-right:0; }
+  .seg button[aria-pressed="true"]{ background:var(--accent-soft); color:var(--accent); }
+
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; background:none; border:1px solid var(--accent); color:var(--accent); padding:11px 16px; font-size:12px; letter-spacing:.16em; text-transform:uppercase; cursor:pointer; width:100%; transition:background .12s,color .12s; }
+  .btn:hover{ background:var(--accent); color:#0a0a0a; }
+  .btn.ghost{ border-color:var(--line-lit); color:var(--dim); }
+  .btn.ghost:hover{ background:var(--bg-raise2); color:var(--text); }
+  .btn.danger{ border-color:var(--neg); color:var(--neg); }
+  .btn.danger:hover{ background:var(--neg); color:#0a0a0a; }
+  .btn-row{ display:flex; gap:10px; margin-top:12px; }
+
+  /* ---------- result tiles ---------- */
+  .tiles{ display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line); border:1px solid var(--line); margin:16px 0; }
+  .tile{ background:var(--bg-raise); padding:13px 14px; }
+  .tile .k{ font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint); margin-bottom:5px; }
+  .tile .val{ font-size:21px; font-weight:600; color:var(--text); line-height:1.1; font-variant-numeric:tabular-nums; }
+  .tile .val.accent{ color:var(--accent); }
+  .tile .val.pos{ color:var(--pos); } .tile .val.neg{ color:var(--neg); }
+  .tile .val.big{ font-size:27px; }
+  .tile .note{ font-size:10px; color:var(--faint); margin-top:3px; letter-spacing:.04em; }
+  .tile.span2{ grid-column:1 / -1; }
+
+  .targets{ border:1px solid var(--line); margin-top:14px; }
+  .trow{ display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid var(--line); font-size:13px; }
+  .trow:last-child{ border-bottom:0; }
+  .trow .lab{ color:var(--dim); letter-spacing:.1em; font-size:11px; }
+  .trow .px{ color:var(--accent); font-variant-numeric:tabular-nums; }
+  .trow .usd{ color:var(--dim); font-variant-numeric:tabular-nums; min-width:84px; text-align:right; }
+
+  .warn{ border:1px solid var(--neg); color:var(--neg); padding:9px 12px; font-size:11.5px; letter-spacing:.04em; margin-top:12px; }
+  .lockbar{ border:1px solid var(--neg); background:rgba(229,83,75,.06); color:var(--neg); padding:13px 14px; margin-bottom:16px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; display:flex; align-items:center; gap:10px; }
+  .lockbar .sq{ width:9px; height:9px; background:var(--neg); display:inline-block; }
+  .okbar{ border:1px solid var(--line-lit); color:var(--accent); padding:12px 14px; margin-bottom:16px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; display:flex; align-items:center; gap:10px; }
+  .okbar .sq{ width:9px; height:9px; background:var(--accent); display:inline-block; animation:pulse 1.7s steps(12) infinite; }
+
+  /* ---------- journal list ---------- */
+  .log{ border:1px solid var(--line); }
+  .logitem{ border-bottom:1px solid var(--line); }
+  .logitem:last-child{ border-bottom:0; }
+  .loghead{ display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer; }
+  .loghead:hover{ background:var(--bg-raise2); }
+  .side{ font-size:10px; letter-spacing:.12em; padding:2px 7px; border:1px solid var(--line-lit); color:var(--dim); }
+  .side.L{ color:var(--pos); border-color:var(--pos); }
+  .side.S{ color:var(--neg); border-color:var(--neg); }
+  .li-main{ flex:1; min-width:0; }
+  .li-tkr{ font-weight:600; color:var(--text); font-size:13px; }
+  .li-meta{ font-size:10.5px; color:var(--faint); letter-spacing:.04em; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .li-r{ font-variant-numeric:tabular-nums; font-size:14px; font-weight:600; min-width:62px; text-align:right; }
+  .li-r.pos{ color:var(--pos); } .li-r.neg{ color:var(--neg); } .li-r.open{ color:var(--accent); }
+  .li-pnl{ font-size:10px; color:var(--faint); text-align:right; margin-top:2px; }
+  .editpanel{ padding:14px; border-top:1px solid var(--line); background:var(--bg-raise2); }
+
+  .empty{ border:1px dashed var(--line-lit); color:var(--faint); padding:26px 16px; text-align:center; font-size:12px; letter-spacing:.06em; }
+
+  /* ---------- equity curve ---------- */
+  .equity{ border:1px solid var(--line); padding:14px; margin-bottom:16px; background:var(--bg-raise); }
+  .equity svg{ width:100%; height:130px; display:block; }
+  .eq-cap{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); margin-bottom:10px; display:flex; justify-content:space-between; }
+
+  /* ---------- divider / footer ---------- */
+  .rule{ height:1px; background:repeating-linear-gradient(to right,var(--line) 0 8px,transparent 8px 14px); margin:20px 0; }
+  footer{ max-width:var(--maxw); margin:0 auto; padding:0 var(--pad) 30px; }
+  .foot-note{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); }
+  .foot-note .ar{ color:var(--accent); }
+  .memflag{ font-size:10px; letter-spacing:.08em; color:var(--neg); margin-top:8px; }
+
+  #install{ display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:calc(16px + env(safe-area-inset-bottom)); z-index:50; background:var(--accent); color:#0a0a0a; border:0; padding:11px 18px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; cursor:pointer; font-weight:600; }
+
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+  @media (max-width:480px){
+    .tab{ font-size:10px; letter-spacing:.06em; padding:11px 2px; }
+    .tile .val{ font-size:19px; } .tile .val.big{ font-size:24px; }
+    .cmd-right .lab{ display:none; }
+  }
+  @media (prefers-reduced-motion:reduce){ *,*::before,*::after{ animation:none !important; } body::after{ display:none; } }
+</style>
+</head>
+
+<body>
+
+  <header class="cmd">
+    <div class="cmd-in">
+      <span class="brand">GIOVANI<span class="c">//</span>DESK</span>
+      <div class="cmd-right">
+        <span id="status-pill" class="pill"><span class="sq"></span><span class="lab">ACTIVE</span></span>
+        <span id="clock">--:--:--</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="tape"><div class="tape-in" id="tape"></div></div>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" data-tab="sizer"   aria-selected="true">Sizer</button>
+    <button class="tab" role="tab" data-tab="session" aria-selected="false">Session</button>
+    <button class="tab" role="tab" data-tab="journal" aria-selected="false">Journal</button>
+    <button class="tab" role="tab" data-tab="stats"   aria-selected="false">Stats</button>
+    <button class="tab" role="tab" data-tab="config"  aria-selected="false">Config</button>
+  </nav>
+
+  <main id="view"></main>
+
+  <footer>
+    <div class="rule"></div>
+    <div class="foot-note"><span class="ar">&gt;</span> built, not bought · tool, not financial advice · do your own analysis</div>
+    <div class="memflag" id="memflag"></div>
+  </footer>
+
+  <button id="install">▸ Install Desk</button>
+
+<script>
+"use strict";
+
+/* ===================== STORAGE (localStorage w/ in-memory fallback) ===================== */
+const Store = (() => {
+  let ok = true, mem = {};
+  try { const t = "__giot"; localStorage.setItem(t, "1"); localStorage.removeItem(t); }
+  catch (e) { ok = false; }
+  return {
+    persistent: ok,
+    get(k, def){ try{ if(ok){ const v = localStorage.getItem(k); return v==null?def:JSON.parse(v); } return (k in mem)?mem[k]:def; }catch(e){ return def; } },
+    set(k, v){ try{ if(ok){ localStorage.setItem(k, JSON.stringify(v)); } else { mem[k]=v; } }catch(e){ mem[k]=v; } }
+  };
+})();
+
+/* ===================== STATE ===================== */
+const PRESETS = { MNQ:{pv:2,tick:0.25}, MES:{pv:5,tick:0.25}, NQ:{pv:20,tick:0.25}, ES:{pv:50,tick:0.25}, CUSTOM:{pv:2,tick:0.25} };
+const DEFAULTS = { account:50000, riskPct:1, maxTrades:3, lossLimitR:3, instrument:"MNQ", instruments:JSON.parse(JSON.stringify(PRESETS)) };
+
+let settings = Object.assign({}, DEFAULTS, Store.get("gio.settings", {}));
+settings.instruments = Object.assign({}, PRESETS, settings.instruments||{});
+let trades = Store.get("gio.trades", []);
+
+let tab = "sizer";
+let editId = null;                 // expanded trade in journal
+let sizerSide = "LONG";
+let formSide = "LONG";
+
+function saveSettings(){ Store.set("gio.settings", settings); }
+function saveTrades(){ Store.set("gio.trades", trades); }
+
+/* ===================== HELPERS ===================== */
+const $  = (s, r=document) => r.querySelector(s);
+const pad = n => n<10 ? "0"+n : ""+n;
+const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmt$(n){ if(n==null||!Number.isFinite(n)) return "—"; const s=n<0?"-$":"$"; return s+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmt$0(n){ if(n==null) return "—"; return "$"+Math.round(n).toLocaleString("en-US"); }
+function fmtR(n){ if(n==null||!Number.isFinite(n)) return "—"; return (n>=0?"+":"")+n.toFixed(2)+"R"; }
+function instOf(name){ const i = settings.instruments[name] || PRESETS[name] || PRESETS.MNQ; return { pv:+i.pv||0, tick:+i.tick||0 }; }
+function activeInst(){ return instOf(settings.instrument); }
+const sign = n => n>0 ? "pos" : n<0 ? "neg" : "";
+
+/* ===================== CORE MATH ===================== */
+function sizeCalc({account, riskPct, riskUsdOverride, entry, stop, side, pv, tick}){
+  const riskUsd = (riskUsdOverride!=null) ? riskUsdOverride : (account||0)*(riskPct||0)/100;
+  const stopPts = (entry!=null && stop!=null) ? Math.abs(entry-stop) : null;
+  const riskPerC = (stopPts!=null) ? stopPts*pv : null;
+  const contracts = (riskPerC>0) ? Math.floor(riskUsd/riskPerC) : 0;
+  const actualRisk = contracts*(riskPerC||0);
+  const stopTicks = (stopPts!=null && tick>0) ? stopPts/tick : null;
+  const dir = side==="SHORT" ? -1 : 1;
+  const targets = (stopPts!=null) ? [1,2,3].map(R => ({ R, price:+(entry + dir*R*stopPts).toFixed(2), usd:R*actualRisk })) : [];
+  return { riskUsd, stopPts, riskPerC, contracts, actualRisk, stopTicks, targets };
+}
+function pnlOf(t){
+  const pv = instOf(t.instrument).pv;
+  const open = (t.exit==null || t.entry==null);
+  const dir = t.side==="SHORT" ? -1 : 1;
+  const riskPerC = (t.entry!=null && t.stop!=null) ? Math.abs(t.entry-t.stop)*pv : null;
+  const risk = (riskPerC!=null) ? riskPerC*(t.size||0) : null;
+  if(open) return { open:true, pnl:null, r:null, risk };
+  const pnl = (t.exit-t.entry)*pv*(t.size||0)*dir;
+  const r = (risk>0) ? pnl/risk : null;
+  return { open:false, pnl, r, risk };
+}
+function session(){
+  const day = todayStr();
+  const ts = trades.filter(t => t.date===day);
+  const used = ts.length;
+  const remaining = Math.max(0, settings.maxTrades - used);
+  let pnl=0, r=0, hasClosed=false;
+  ts.forEach(t => { const c=pnlOf(t); if(c.pnl!=null){ pnl+=c.pnl; hasClosed=true; } if(c.r!=null){ r+=c.r; } });
+  let locked=false, reason="";
+  if(used >= settings.maxTrades){ locked=true; reason="MAX TRADES"; }
+  else if(hasClosed && r <= -Math.abs(settings.lossLimitR)){ locked=true; reason="LOSS LIMIT"; }
+  return { day, trades:ts, used, remaining, pnl, r, locked, reason, hasClosed };
+}
+function stats(){
+  const closed = trades.map(t=>({t, c:pnlOf(t)})).filter(x=>!x.c.open);
+  const n = closed.length;
+  let wins=0, losses=0, be=0, gross=0, win$=0, loss$=0, rSum=0, best=-Infinity, worst=Infinity;
+  closed.forEach(({c}) => {
+    gross += c.pnl; rSum += (c.r||0);
+    if(c.pnl>0){ wins++; win$+=c.pnl; } else if(c.pnl<0){ losses++; loss$+=c.pnl; } else { be++; }
+    best=Math.max(best,c.pnl); worst=Math.min(worst,c.pnl);
+  });
+  const decided = wins+losses;
+  return {
+    n, wins, losses, be,
+    winRate: decided? wins/decided*100 : null,
+    pnl: gross,
+    expR: n? rSum/n : null,
+    rSum,
+    pf: loss$<0 ? win$/Math.abs(loss$) : (win$>0? Infinity : null),
+    best: n? best : null, worst: n? worst : null,
+    closed
+  };
+}
+
+/* ===================== RENDER: TOP CHROME ===================== */
+function renderChrome(){
+  const s = session();
+  const ac = activeInst();
+  // status pill
+  const pill = $("#status-pill");
+  if(s.locked){ pill.className="pill lock"; pill.innerHTML='<span class="sq"></span><span class="lab">LOCKED</span>'; }
+  else { pill.className="pill"; pill.innerHTML='<span class="sq"></span><span class="lab">'+ s.remaining +' LEFT</span>'; }
+  // ticker tape
+  const pnlCls = s.pnl>0?"pos":s.pnl<0?"neg":"v";
+  const rCls = s.r>0?"pos":s.r<0?"neg":"v";
+  $("#tape").innerHTML =
+    tapeItem("ACCT", fmt$0(settings.account), "v") +
+    tapeItem("INSTR", settings.instrument+" · $"+ac.pv+"/pt", "v") +
+    tapeItem("DAY P&L", s.hasClosed?fmt$(s.pnl):"—", s.hasClosed?pnlCls:"v") +
+    tapeItem("DAY R", s.hasClosed?fmtR(s.r):"—", s.hasClosed?rCls:"v") +
+    tapeItem("TRADES", s.used+" / "+settings.maxTrades, s.locked?"neg":"v", true);
+  // mem flag
+  $("#memflag").textContent = Store.persistent ? "" : "⚠ MEMORY MODE — storage unavailable in this context; data won't persist. Install or deploy over https for a permanent journal.";
+}
+function tapeItem(k,v,cls,last){ return '<span><b>'+k+'</b> <span class="'+cls+'">'+esc(v)+'</span></span>'+(last?'':'<span class="d">·</span>'); }
+
+/* ===================== RENDER: VIEWS ===================== */
+function render(){
+  document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.tab===tab ? "true":"false"));
+  const v = $("#view");
+  if(tab==="sizer")   v.innerHTML = viewSizer();
+  if(tab==="session") v.innerHTML = viewSession();
+  if(tab==="journal") v.innerHTML = viewJournal();
+  if(tab==="stats")   v.innerHTML = viewStats();
+  if(tab==="config")  v.innerHTML = viewConfig();
+  renderChrome();
+  if(tab==="sizer") recomputeSizer();
+  if(tab==="stats") drawEquity();
+}
+
+/* ---- SIZER ---- */
+function viewSizer(){
+  const ac = activeInst();
+  return `
+  <p class="eyebrow">// Position Sizer</p>
+  <p class="sub">${esc(settings.instrument)} · $${ac.pv}/pt · ${ac.tick} tick · risk ${settings.riskPct}% of ${fmt$0(settings.account)}</p>
+
+  <div id="sizer-form">
+    <div class="field">
+      <label>Direction</label>
+      <div class="seg" id="sz-side">
+        <button data-side="LONG"  aria-pressed="${sizerSide==='LONG'}">LONG</button>
+        <button data-side="SHORT" aria-pressed="${sizerSide==='SHORT'}">SHORT</button>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Entry</label><input id="sz-entry" type="number" inputmode="decimal" step="any" placeholder="18000.00"></div>
+      <div class="field"><label>Stop</label><input id="sz-stop" type="number" inputmode="decimal" step="any" placeholder="17980.00"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Risk %</label><input id="sz-riskpct" type="number" inputmode="decimal" step="any" value="${settings.riskPct}"></div>
+      <div class="field"><label>Or risk $ (override)</label><input id="sz-riskusd" type="number" inputmode="decimal" step="any" placeholder="auto"></div>
+    </div>
+  </div>
+
+  <div id="sz-out"></div>
+
+  <div class="btn-row">
+    <button class="btn" data-act="sizer-log">▸ Send to Journal</button>
+  </div>`;
+}
+function readSizer(){
+  const ac = activeInst();
+  const entry=num($("#sz-entry").value), stop=num($("#sz-stop").value);
+  const riskPct=num($("#sz-riskpct").value), riskUsd=num($("#sz-riskusd").value);
+  return { account:settings.account, riskPct:riskPct==null?settings.riskPct:riskPct, riskUsdOverride:riskUsd, entry, stop, side:sizerSide, pv:ac.pv, tick:ac.tick };
+}
+function recomputeSizer(){
+  const inp = readSizer();
+  const out = $("#sz-out"); if(!out) return;
+  if(inp.entry==null || inp.stop==null){ out.innerHTML = `<div class="empty">Enter an entry and stop to size the position.</div>`; return; }
+  const r = sizeCalc(inp);
+  let wrongSide = "";
+  if(sizerSide==="LONG" && inp.stop>inp.entry) wrongSide = "Stop is above entry for a LONG — check your levels.";
+  if(sizerSide==="SHORT" && inp.stop<inp.entry) wrongSide = "Stop is below entry for a SHORT — check your levels.";
+  out.innerHTML = `
+    <div class="tiles">
+      <div class="tile span2"><div class="k">Position Size</div><div class="val accent big">${r.contracts} <span style="font-size:13px;color:var(--dim);letter-spacing:.1em;">CONTRACTS</span></div><div class="note">at $${activeInst().pv}/pt · actual risk ${fmt$(r.actualRisk)}</div></div>
+      <div class="tile"><div class="k">Stop Distance</div><div class="val">${r.stopPts}<span style="font-size:12px;color:var(--dim);"> pt</span></div><div class="note">${r.stopTicks!=null?r.stopTicks.toFixed(0)+" ticks":""}</div></div>
+      <div class="tile"><div class="k">Risk / Contract</div><div class="val">${fmt$(r.riskPerC)}</div><div class="note">budget ${fmt$(r.riskUsd)}</div></div>
+    </div>
+    <div class="targets">
+      ${r.targets.map(t=>`<div class="trow"><span class="lab">${t.R}R TARGET</span><span class="px">${t.price}</span><span class="usd">${fmt$(t.usd)}</span></div>`).join("")}
+    </div>
+    ${wrongSide?`<div class="warn">⚠ ${wrongSide}</div>`:""}`;
+}
+
+/* ---- SESSION ---- */
+function viewSession(){
+  const s = session();
+  const bar = s.locked
+    ? `<div class="lockbar"><span class="sq"></span>SESSION LOCKED — ${s.reason}</div>`
+    : `<div class="okbar"><span class="sq"></span>SESSION ACTIVE — ${s.remaining} of ${settings.maxTrades} trades remaining</div>`;
+  const list = s.trades.length ? logList(s.trades) : `<div class="empty">No trades logged today. Size one in SIZER, then send it here.</div>`;
+  return `
+  <p class="eyebrow">// Session · ${s.day}</p>
+  <p class="sub">circuit breaker: ${settings.maxTrades} trades / day · loss limit ${settings.lossLimitR}R</p>
+  ${bar}
+  <div class="tiles">
+    <div class="tile"><div class="k">Trades Used</div><div class="val ${s.locked?'neg':'accent'}">${s.used} / ${settings.maxTrades}</div></div>
+    <div class="tile"><div class="k">Day R</div><div class="val ${s.hasClosed?sign(s.r):''}">${s.hasClosed?fmtR(s.r):'—'}</div></div>
+    <div class="tile span2"><div class="k">Day P&amp;L</div><div class="val big ${s.hasClosed?sign(s.pnl):''}">${s.hasClosed?fmt$(s.pnl):'—'}</div></div>
+  </div>
+  <div class="blockhead" style="margin-top:18px"><span class="eyebrow" style="margin:0">Today's Tape</span></div>
+  ${list}`;
+}
+
+/* ---- JOURNAL ---- */
+function viewJournal(){
+  const list = trades.length ? logList(trades.slice().reverse()) : `<div class="empty">Journal empty. Log your first trade below.</div>`;
+  return `
+  <p class="eyebrow">// Journal</p>
+  <p class="sub">${trades.length} trade${trades.length===1?'':'s'} · stored ${Store.persistent?'on this device':'in memory (non-persistent)'}</p>
+  ${tradeForm()}
+  <div class="rule"></div>
+  <div class="blockhead"><span class="eyebrow" style="margin:0">Log</span><span class="sub" style="margin:0">newest first</span></div>
+  ${list}`;
+}
+function tradeForm(){
+  return `
+  <div id="trade-form">
+    <div class="field"><label>Direction</label>
+      <div class="seg" id="tf-side">
+        <button data-fside="LONG" aria-pressed="${formSide==='LONG'}">LONG</button>
+        <button data-fside="SHORT" aria-pressed="${formSide==='SHORT'}">SHORT</button>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Instrument</label>${instrSelect("tf-inst", settings.instrument)}</div>
+      <div class="field"><label>Date</label><input id="tf-date" type="date" value="${todayStr()}"></div>
+    </div>
+    <div class="grid3">
+      <div class="field"><label>Entry</label><input id="tf-entry" type="number" step="any" inputmode="decimal" placeholder="18000"></div>
+      <div class="field"><label>Stop</label><input id="tf-stop" type="number" step="any" inputmode="decimal" placeholder="17980"></div>
+      <div class="field"><label>Exit</label><input id="tf-exit" type="number" step="any" inputmode="decimal" placeholder="open"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Size (contracts)</label><input id="tf-size" type="number" step="1" inputmode="numeric" placeholder="1"></div>
+      <div class="field"><label>Setup tag</label><input id="tf-setup" type="text" placeholder="S&D flip / HTF"></div>
+    </div>
+    <div class="field"><label>Notes</label><input id="tf-notes" type="text" placeholder="execution / context"></div>
+    <button class="btn" data-act="trade-add">▸ Log Trade</button>
+  </div>`;
+}
+function instrSelect(id, val){
+  return `<select id="${id}">`+Object.keys(settings.instruments).map(k=>`<option value="${k}"${k===val?' selected':''}>${k}</option>`).join("")+`</select>`;
+}
+
+/* shared trade list + inline edit */
+function logList(list){
+  return `<div class="log">`+list.map(t=>logRow(t)).join("")+`</div>`;
+}
+function logRow(t){
+  const c = pnlOf(t);
+  const sc = t.side==="SHORT" ? "S" : "L";
+  const rCls = c.open ? "open" : sign(c.r);
+  const rTxt = c.open ? "OPEN" : fmtR(c.r);
+  const pnlTxt = c.open ? (c.risk!=null?("risk "+fmt$(c.risk)):"") : fmt$(c.pnl);
+  const meta = `${t.entry??'?'} → ${c.open?'·':(t.exit??'?')} · ${t.size||0}x${t.setup?' · '+esc(t.setup):''}`;
+  const open = editId===t.id;
+  return `
+  <div class="logitem">
+    <div class="loghead" data-act="edit" data-id="${t.id}">
+      <span class="side ${sc}">${sc==='S'?'SHORT':'LONG'}</span>
+      <span class="li-main">
+        <span class="li-tkr">${esc(t.instrument)} <span style="color:var(--faint);font-weight:400;font-size:11px;">${esc(t.date)}</span></span>
+        <span class="li-meta">${meta}</span>
+      </span>
+      <span>
+        <span class="li-r ${rCls}">${rTxt}</span>
+        <div class="li-pnl">${pnlTxt}</div>
+      </span>
+    </div>
+    ${open?editForm(t):""}
+  </div>`;
+}
+function editForm(t){
+  return `
+  <div class="editpanel">
+    <div class="grid3">
+      <div class="field"><label>Entry</label><input id="ed-entry" type="number" step="any" value="${t.entry??''}"></div>
+      <div class="field"><label>Stop</label><input id="ed-stop" type="number" step="any" value="${t.stop??''}"></div>
+      <div class="field"><label>Exit</label><input id="ed-exit" type="number" step="any" value="${t.exit??''}" placeholder="open"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Size</label><input id="ed-size" type="number" step="1" value="${t.size??''}"></div>
+      <div class="field"><label>Setup</label><input id="ed-setup" type="text" value="${esc(t.setup||'')}"></div>
+    </div>
+    <div class="field"><label>Notes</label><input id="ed-notes" type="text" value="${esc(t.notes||'')}"></div>
+    <div class="btn-row">
+      <button class="btn" data-act="edit-save" data-id="${t.id}">▸ Save</button>
+      <button class="btn danger" data-act="edit-del" data-id="${t.id}">✕ Delete</button>
+    </div>
+  </div>`;
+}
+
+/* ---- STATS ---- */
+function viewStats(){
+  const s = stats();
+  if(s.n===0) return `<p class="eyebrow">// Stats</p><div class="empty">No closed trades yet. Stats populate once trades have an exit.</div>`;
+  const pf = s.pf===Infinity ? "∞" : (s.pf==null?"—":s.pf.toFixed(2));
+  return `
+  <p class="eyebrow">// Stats</p>
+  <p class="sub">${s.n} closed · ${s.wins}W / ${s.losses}L${s.be?' / '+s.be+'BE':''}</p>
+  <div class="equity">
+    <div class="eq-cap"><span>CUMULATIVE R</span><span class="${sign(s.rSum)}" style="color:${s.rSum>=0?'var(--pos)':'var(--neg)'}">${fmtR(s.rSum)}</span></div>
+    <svg id="eq-svg" viewBox="0 0 600 130" preserveAspectRatio="none" aria-hidden="true"></svg>
+  </div>
+  <div class="tiles">
+    <div class="tile"><div class="k">Win Rate</div><div class="val accent">${s.winRate!=null?s.winRate.toFixed(0)+'%':'—'}</div></div>
+    <div class="tile"><div class="k">Expectancy</div><div class="val ${s.expR!=null?sign(s.expR):''}">${fmtR(s.expR)}</div><div class="note">avg per trade</div></div>
+    <div class="tile"><div class="k">Net P&amp;L</div><div class="val ${sign(s.pnl)}">${fmt$(s.pnl)}</div></div>
+    <div class="tile"><div class="k">Profit Factor</div><div class="val">${pf}</div></div>
+    <div class="tile"><div class="k">Best</div><div class="val pos">${fmt$(s.best)}</div></div>
+    <div class="tile"><div class="k">Worst</div><div class="val neg">${fmt$(s.worst)}</div></div>
+  </div>`;
+}
+function drawEquity(){
+  const svg = $("#eq-svg"); if(!svg) return;
+  const s = stats(); const pts = []; let cum=0;
+  s.closed.forEach(({c})=>{ cum += (c.r||0); pts.push(cum); });
+  if(pts.length===0) return;
+  const W=600,H=130,padX=4,padY=10;
+  const min=Math.min(0,...pts), max=Math.max(0,...pts), span=(max-min)||1;
+  const x = i => padX + (pts.length===1?0:i/(pts.length-1))*(W-2*padX);
+  const y = v => padY + (1-(v-min)/span)*(H-2*padY);
+  const zeroY = y(0);
+  const line = pts.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)).join(' ');
+  const area = `M${x(0).toFixed(1)} ${zeroY.toFixed(1)} `+pts.map((v,i)=>'L'+x(i).toFixed(1)+' '+y(v).toFixed(1)).join(' ')+` L${x(pts.length-1).toFixed(1)} ${zeroY.toFixed(1)} Z`;
+  const up = cum>=0;
+  const col = up ? "var(--pos)" : "var(--neg)";
+  svg.innerHTML =
+    `<line x1="0" y1="${zeroY.toFixed(1)}" x2="${W}" y2="${zeroY.toFixed(1)}" stroke="var(--line-lit)" stroke-width="1" stroke-dasharray="3 4"/>`+
+    `<path d="${area}" fill="${up?'rgba(78,201,168,.10)':'rgba(229,83,75,.10)'}"/>`+
+    `<path d="${line}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>`+
+    pts.map((v,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.4" fill="${col}"/>`).join("");
+}
+
+/* ---- CONFIG ---- */
+function viewConfig(){
+  const ac = activeInst();
+  return `
+  <p class="eyebrow">// Config</p>
+  <p class="sub">risk framework · contract specs · data</p>
+  <div class="grid2">
+    <div class="field"><label>Account ($)</label><input id="cf-account" type="number" step="any" value="${settings.account}"></div>
+    <div class="field"><label>Default risk %</label><input id="cf-riskpct" type="number" step="any" value="${settings.riskPct}"></div>
+  </div>
+  <div class="grid2">
+    <div class="field"><label>Max trades / day</label><input id="cf-maxtrades" type="number" step="1" value="${settings.maxTrades}"></div>
+    <div class="field"><label>Daily loss limit (R)</label><input id="cf-loss" type="number" step="any" value="${settings.lossLimitR}"></div>
+  </div>
+  <div class="rule"></div>
+  <div class="blockhead"><span class="eyebrow" style="margin:0">Instrument</span><span class="sub" style="margin:0">CME specs — verify w/ broker</span></div>
+  <div class="field"><label>Active instrument</label>${instrSelect("cf-inst", settings.instrument)}</div>
+  <div class="grid2">
+    <div class="field"><label>$ per point</label><input id="cf-pv" type="number" step="any" value="${ac.pv}"></div>
+    <div class="field"><label>Tick size</label><input id="cf-tick" type="number" step="any" value="${ac.tick}"></div>
+  </div>
+  <button class="btn" data-act="config-save">▸ Save Config</button>
+  <div class="rule"></div>
+  <div class="blockhead"><span class="eyebrow" style="margin:0">Data</span></div>
+  <div class="btn-row">
+    <button class="btn ghost" data-act="export">▾ Export JSON</button>
+    <button class="btn danger" data-act="reset-day">✕ Clear Today</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn danger" data-act="reset-all">✕ Wipe All Trades</button>
+  </div>`;
+}
+
+/* ===================== EVENTS ===================== */
+document.addEventListener("click", e => {
+  const tabBtn = e.target.closest(".tab");
+  if(tabBtn){ tab = tabBtn.dataset.tab; editId=null; render(); return; }
+
+  const sideBtn = e.target.closest("#sz-side button");
+  if(sideBtn){ sizerSide = sideBtn.dataset.side; document.querySelectorAll("#sz-side button").forEach(b=>b.setAttribute("aria-pressed", b===sideBtn?"true":"false")); recomputeSizer(); return; }
+
+  const fsideBtn = e.target.closest("#tf-side button");
+  if(fsideBtn){ formSide = fsideBtn.dataset.fside; document.querySelectorAll("#tf-side button").forEach(b=>b.setAttribute("aria-pressed", b===fsideBtn?"true":"false")); return; }
+
+  const act = e.target.closest("[data-act]");
+  if(!act) return;
+  const a = act.dataset.act, id = act.dataset.id;
+
+  if(a==="sizer-log") return sizerLog();
+  if(a==="trade-add") return addTrade();
+  if(a==="edit"){ editId = (editId===id ? null : id); render(); return; }
+  if(a==="edit-save") return saveEdit(id);
+  if(a==="edit-del") return delTrade(id);
+  if(a==="config-save") return saveConfig();
+  if(a==="export") return exportData();
+  if(a==="reset-day") return clearToday();
+  if(a==="reset-all") return wipeAll();
+});
+
+document.addEventListener("input", e => {
+  if(e.target.closest("#sizer-form")) recomputeSizer();
+});
+// keep config instrument fields in sync when switching active instrument
+document.addEventListener("change", e => {
+  if(e.target.id==="cf-inst"){
+    settings.instrument = e.target.value;
+    const ac = instOf(e.target.value);
+    if($("#cf-pv")) $("#cf-pv").value = ac.pv;
+    if($("#cf-tick")) $("#cf-tick").value = ac.tick;
+  }
+});
+
+/* ===================== ACTIONS ===================== */
+function sizerLog(){
+  const s = session();
+  const inp = readSizer();
+  if(inp.entry==null || inp.stop==null){ flash("Set entry + stop first."); return; }
+  const r = sizeCalc(inp);
+  if(r.contracts<=0){ flash("Size is 0 — widen risk or tighten stop."); return; }
+  if(s.locked && !confirm("Session is LOCKED ("+s.reason+"). Log anyway?")) return;
+  trades.push({ id:uid(), ts:new Date().toISOString(), date:todayStr(), instrument:settings.instrument, side:sizerSide, entry:inp.entry, stop:inp.stop, exit:null, size:r.contracts, setup:"", notes:"" });
+  saveTrades(); tab="session"; editId=null; render();
+}
+function addTrade(){
+  const t = {
+    id:uid(), ts:new Date().toISOString(),
+    date: $("#tf-date").value || todayStr(),
+    instrument: $("#tf-inst").value,
+    side: formSide,
+    entry:num($("#tf-entry").value), stop:num($("#tf-stop").value), exit:num($("#tf-exit").value),
+    size:num($("#tf-size").value)||0,
+    setup: $("#tf-setup").value.trim(), notes:$("#tf-notes").value.trim()
+  };
+  if(t.entry==null || t.stop==null || !t.size){ flash("Entry, stop, and size are required."); return; }
+  trades.push(t); saveTrades(); editId=null; render();
+}
+function saveEdit(id){
+  const t = trades.find(x=>x.id===id); if(!t) return;
+  t.entry=num($("#ed-entry").value); t.stop=num($("#ed-stop").value); t.exit=num($("#ed-exit").value);
+  t.size=num($("#ed-size").value)||0; t.setup=$("#ed-setup").value.trim(); t.notes=$("#ed-notes").value.trim();
+  saveTrades(); editId=null; render();
+}
+function delTrade(id){
+  if(!confirm("Delete this trade?")) return;
+  trades = trades.filter(x=>x.id!==id); saveTrades(); editId=null; render();
+}
+function saveConfig(){
+  settings.account = num($("#cf-account").value) ?? settings.account;
+  settings.riskPct = num($("#cf-riskpct").value) ?? settings.riskPct;
+  settings.maxTrades = Math.max(1, Math.round(num($("#cf-maxtrades").value) ?? settings.maxTrades));
+  settings.lossLimitR = Math.abs(num($("#cf-loss").value) ?? settings.lossLimitR);
+  settings.instrument = $("#cf-inst").value;
+  settings.instruments[settings.instrument] = { pv:num($("#cf-pv").value)??activeInst().pv, tick:num($("#cf-tick").value)??activeInst().tick };
+  saveSettings(); flash("Config saved."); render();
+}
+function exportData(){
+  const blob = new Blob([JSON.stringify({settings, trades}, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "gio-desk-"+todayStr()+".json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+function clearToday(){
+  if(!confirm("Clear all of today's trades?")) return;
+  const d=todayStr(); trades = trades.filter(t=>t.date!==d); saveTrades(); editId=null; render();
+}
+function wipeAll(){
+  if(!confirm("Wipe the ENTIRE journal? This cannot be undone.")) return;
+  trades = []; saveTrades(); editId=null; render();
+}
+function flash(msg){ /* lightweight transient notice via pill */ const p=$("#status-pill"); const prev=p.innerHTML; p.innerHTML='<span class="lab">'+esc(msg)+'</span>'; setTimeout(renderChrome, 1800); }
+
+/* ===================== CLOCK ===================== */
+(function clock(){
+  const el = $("#clock"); if(!el) return;
+  function tz(d){ try{ const p=new Intl.DateTimeFormat("en-US",{timeZoneName:"short"}).formatToParts(d); const m=p.find(x=>x.type==="timeZoneName"); return m?" "+m.value:""; }catch(e){ return ""; } }
+  function t(){ const d=new Date(); el.textContent = pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds())+tz(d); }
+  t(); setInterval(t, 1000);
+})();
+
+/* ===================== PWA: install + service worker ===================== */
+let deferredPrompt = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredPrompt=e; const b=$("#install"); if(b) b.style.display="block"; });
+$("#install").addEventListener("click", async () => {
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; $("#install").style.display="none";
+});
+window.addEventListener("appinstalled", () => { $("#install").style.display="none"; });
+if("serviceWorker" in navigator){
+  window.addEventListener("load", () => { navigator.serviceWorker.register("./sw.js").catch(()=>{}); });
+}
+
+/* ===================== BOOT ===================== */
+render();
+</script>
+</body>
+</html>
