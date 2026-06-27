@@ -42,7 +42,9 @@
     background:repeating-linear-gradient(to bottom,rgba(255,255,255,.02) 0 1px,transparent 1px 3px);
   }
   ::selection{ background:var(--accent); color:#0a0a0a; }
-  .wrap{ max-width:var(--maxw); margin:0 auto; }
+
+  /* shared centering shell */
+  .shell{ max-width:var(--maxw); margin:0 auto; padding:0 var(--pad); }
 
   /* ---------- command bar ---------- */
   .cmd{ position:sticky; top:0; z-index:40; background:var(--bg); border-bottom:1px solid var(--line); }
@@ -56,9 +58,9 @@
   .pill.lock{ color:var(--neg); border-color:var(--neg); }
   .pill.lock .sq{ background:var(--neg); animation:none; }
 
-  /* ---------- live ticker ---------- */
-  .tape{ border-bottom:1px solid var(--line); overflow:hidden; white-space:nowrap; font-size:11px; letter-spacing:.12em; color:var(--faint); padding:6px 0; text-transform:uppercase; }
-  .tape-in{ max-width:var(--maxw); margin:0 auto; padding:0 var(--pad); display:flex; justify-content:center; gap:0; flex-wrap:nowrap; }
+  /* ---------- tape ---------- */
+  .tape{ border-bottom:1px solid var(--line); font-size:11px; letter-spacing:.12em; color:var(--faint); padding:6px 0; text-transform:uppercase; overflow:hidden; }
+  .tape-in{ max-width:var(--maxw); margin:0 auto; padding:0 var(--pad); display:flex; justify-content:flex-start; gap:0; flex-wrap:nowrap; white-space:nowrap; }
   .tape b{ color:var(--dim); font-weight:500; }
   .tape .v{ color:var(--text); }
   .tape .d{ color:var(--accent); padding:0 .8em; }
@@ -66,8 +68,8 @@
 
   /* ---------- tabs ---------- */
   nav.tabs{ position:sticky; top:39px; z-index:30; background:var(--bg); border-bottom:1px solid var(--line); }
-  .tabs-in{ max-width:var(--maxw); margin:0 auto; display:flex; justify-content:center; }
-  .tab{ width:120px; background:none; border:0; border-right:1px solid var(--line); color:var(--dim); font-size:11px; letter-spacing:.12em; padding:11px 4px; cursor:pointer; text-transform:uppercase; transition:color .12s,background .12s; text-align:center; }
+  .tabs-in{ max-width:var(--maxw); margin:0 auto; padding:0 var(--pad); display:flex; }
+  .tab{ flex:1; background:none; border:0; border-right:1px solid var(--line); color:var(--dim); font-size:11px; letter-spacing:.12em; padding:11px 4px; cursor:pointer; text-transform:uppercase; transition:color .12s,background .12s; text-align:center; }
   .tab:last-child{ border-right:0; }
   .tab[aria-selected="true"]{ color:var(--accent); background:var(--bg-raise2); box-shadow:inset 0 -2px 0 var(--accent); }
   .tab:hover{ color:var(--text); }
@@ -124,7 +126,7 @@
   .okbar{ border:1px solid var(--line-lit); color:var(--accent); padding:12px 14px; margin-bottom:16px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; display:flex; align-items:center; gap:10px; }
   .okbar .sq{ width:9px; height:9px; background:var(--accent); display:inline-block; animation:pulse 1.7s steps(12) infinite; }
 
-  /* ---------- journal list ---------- */
+  /* ---------- journal ---------- */
   .log{ border:1px solid var(--line); }
   .logitem{ border-bottom:1px solid var(--line); }
   .logitem:last-child{ border-bottom:0; }
@@ -148,7 +150,7 @@
   .equity svg{ width:100%; height:130px; display:block; }
   .eq-cap{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); margin-bottom:10px; display:flex; justify-content:space-between; }
 
-  /* ---------- divider / footer ---------- */
+  /* ---------- footer ---------- */
   .rule{ height:1px; background:repeating-linear-gradient(to right,var(--line) 0 8px,transparent 8px 14px); margin:20px 0; }
   footer{ max-width:var(--maxw); margin:0 auto; padding:0 var(--pad) 30px; }
   .foot-note{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); }
@@ -159,7 +161,7 @@
 
   @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
   @media (max-width:480px){
-    .tab{ font-size:10px; letter-spacing:.06em; padding:11px 2px; width:64px; }
+    .tab{ font-size:10px; letter-spacing:.06em; padding:11px 2px; }
     .tile .val{ font-size:19px; } .tile .val.big{ font-size:24px; }
     .cmd-right .lab{ display:none; }
   }
