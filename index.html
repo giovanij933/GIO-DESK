@@ -19,13 +19,12 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
 <style>
-  /* accent swap: change --accent (amber #ffb000 → green #00e676) */
   :root{
     --bg:#0a0a0a; --bg-raise:#101010; --bg-raise2:#15130d; --bg-input:#0d0d0c;
     --line:#1e1d1a; --line-lit:#2c2a24;
     --text:#d6d3c8; --dim:#8a877d; --faint:#56544c;
     --accent:#ffb000; --accent-soft:rgba(255,176,0,.12);
-    --pos:#4ec9a8; --neg:#e5534b;            /* P&L signal greens/reds (functional only) */
+    --pos:#4ec9a8; --neg:#e5534b;
     --mono:'IBM Plex Mono','SFMono-Regular','SF Mono','Courier New',monospace;
     --pad:18px; --maxw:900px;
   }
@@ -57,7 +56,7 @@
   .pill.lock{ color:var(--neg); border-color:var(--neg); }
   .pill.lock .sq{ background:var(--neg); animation:none; }
 
-  /* ---------- live ticker (session readout) ---------- */
+  /* ---------- live ticker ---------- */
   .tape{ border-bottom:1px solid var(--line); overflow:hidden; white-space:nowrap; font-size:11px; letter-spacing:.12em; color:var(--faint); padding:6px 0; text-transform:uppercase; }
   .tape-in{ max-width:var(--maxw); margin:0 auto; padding:0 var(--pad); display:flex; justify-content:center; gap:0; flex-wrap:nowrap; }
   .tape b{ color:var(--dim); font-weight:500; }
@@ -66,9 +65,9 @@
   .tape .pos{ color:var(--pos); } .tape .neg{ color:var(--neg); }
 
   /* ---------- tabs ---------- */
-  nav.tabs{ position:sticky; top:39px; z-index:30; background:var(--bg); border-bottom:1px solid var(--line);justify-content:center; }
+  nav.tabs{ position:sticky; top:39px; z-index:30; background:var(--bg); border-bottom:1px solid var(--line); }
   .tabs-in{ max-width:var(--maxw); margin:0 auto; display:flex; justify-content:center; }
-  .tab{ width:120px; background:none; border:0; border-right:1px solid var(--line); color:var(--dim); font-size:11px; letter-spacing:.12em; padding:11px 4px; cursor:pointer; text-transform:uppercase; transition:color .12s,background .12s; }
+  .tab{ width:120px; background:none; border:0; border-right:1px solid var(--line); color:var(--dim); font-size:11px; letter-spacing:.12em; padding:11px 4px; cursor:pointer; text-transform:uppercase; transition:color .12s,background .12s; text-align:center; }
   .tab:last-child{ border-right:0; }
   .tab[aria-selected="true"]{ color:var(--accent); background:var(--bg-raise2); box-shadow:inset 0 -2px 0 var(--accent); }
   .tab:hover{ color:var(--text); }
@@ -160,7 +159,7 @@
 
   @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
   @media (max-width:480px){
-    .tab{ font-size:10px; letter-spacing:.06em; padding:11px 2px; }
+    .tab{ font-size:10px; letter-spacing:.06em; padding:11px 2px; width:64px; }
     .tile .val{ font-size:19px; } .tile .val.big{ font-size:24px; }
     .cmd-right .lab{ display:none; }
   }
@@ -183,11 +182,13 @@
   <div class="tape"><div class="tape-in" id="tape"></div></div>
 
   <nav class="tabs" role="tablist" aria-label="Sections">
-    <button class="tab" role="tab" data-tab="sizer"   aria-selected="true">Sizer</button>
-    <button class="tab" role="tab" data-tab="session" aria-selected="false">Session</button>
-    <button class="tab" role="tab" data-tab="journal" aria-selected="false">Journal</button>
-    <button class="tab" role="tab" data-tab="stats"   aria-selected="false">Stats</button>
-    <button class="tab" role="tab" data-tab="config"  aria-selected="false">Config</button>
+    <div class="tabs-in">
+      <button class="tab" role="tab" data-tab="sizer"   aria-selected="true">Sizer</button>
+      <button class="tab" role="tab" data-tab="session" aria-selected="false">Session</button>
+      <button class="tab" role="tab" data-tab="journal" aria-selected="false">Journal</button>
+      <button class="tab" role="tab" data-tab="stats"   aria-selected="false">Stats</button>
+      <button class="tab" role="tab" data-tab="config"  aria-selected="false">Config</button>
+    </div>
   </nav>
 
   <main id="view"></main>
@@ -203,7 +204,7 @@
 <script>
 "use strict";
 
-/* ===================== STORAGE (localStorage w/ in-memory fallback) ===================== */
+/* ===================== STORAGE ===================== */
 const Store = (() => {
   let ok = true, mem = {};
   try { const t = "__giot"; localStorage.setItem(t, "1"); localStorage.removeItem(t); }
@@ -224,7 +225,7 @@ settings.instruments = Object.assign({}, PRESETS, settings.instruments||{});
 let trades = Store.get("gio.trades", []);
 
 let tab = "sizer";
-let editId = null;                 // expanded trade in journal
+let editId = null;
 let sizerSide = "LONG";
 let formSide = "LONG";
 
@@ -306,11 +307,9 @@ function stats(){
 function renderChrome(){
   const s = session();
   const ac = activeInst();
-  // status pill
   const pill = $("#status-pill");
   if(s.locked){ pill.className="pill lock"; pill.innerHTML='<span class="sq"></span><span class="lab">LOCKED</span>'; }
   else { pill.className="pill"; pill.innerHTML='<span class="sq"></span><span class="lab">'+ s.remaining +' LEFT</span>'; }
-  // ticker tape
   const pnlCls = s.pnl>0?"pos":s.pnl<0?"neg":"v";
   const rCls = s.r>0?"pos":s.r<0?"neg":"v";
   $("#tape").innerHTML =
@@ -319,7 +318,6 @@ function renderChrome(){
     tapeItem("DAY P&L", s.hasClosed?fmt$(s.pnl):"—", s.hasClosed?pnlCls:"v") +
     tapeItem("DAY R", s.hasClosed?fmtR(s.r):"—", s.hasClosed?rCls:"v") +
     tapeItem("TRADES", s.used+" / "+settings.maxTrades, s.locked?"neg":"v", true);
-  // mem flag
   $("#memflag").textContent = Store.persistent ? "" : "⚠ MEMORY MODE — storage unavailable in this context; data won't persist. Install or deploy over https for a permanent journal.";
 }
 function tapeItem(k,v,cls,last){ return '<span><b>'+k+'</b> <span class="'+cls+'">'+esc(v)+'</span></span>'+(last?'':'<span class="d">·</span>'); }
@@ -456,7 +454,6 @@ function instrSelect(id, val){
   return `<select id="${id}">`+Object.keys(settings.instruments).map(k=>`<option value="${k}"${k===val?' selected':''}>${k}</option>`).join("")+`</select>`;
 }
 
-/* shared trade list + inline edit */
 function logList(list){
   return `<div class="log">`+list.map(t=>logRow(t)).join("")+`</div>`;
 }
@@ -608,7 +605,6 @@ document.addEventListener("click", e => {
 document.addEventListener("input", e => {
   if(e.target.closest("#sizer-form")) recomputeSizer();
 });
-// keep config instrument fields in sync when switching active instrument
 document.addEventListener("change", e => {
   if(e.target.id==="cf-inst"){
     settings.instrument = e.target.value;
@@ -676,7 +672,7 @@ function wipeAll(){
   if(!confirm("Wipe the ENTIRE journal? This cannot be undone.")) return;
   trades = []; saveTrades(); editId=null; render();
 }
-function flash(msg){ /* lightweight transient notice via pill */ const p=$("#status-pill"); const prev=p.innerHTML; p.innerHTML='<span class="lab">'+esc(msg)+'</span>'; setTimeout(renderChrome, 1800); }
+function flash(msg){ const p=$("#status-pill"); const prev=p.innerHTML; p.innerHTML='<span class="lab">'+esc(msg)+'</span>'; setTimeout(renderChrome, 1800); }
 
 /* ===================== CLOCK ===================== */
 (function clock(){
@@ -686,7 +682,7 @@ function flash(msg){ /* lightweight transient notice via pill */ const p=$("#sta
   t(); setInterval(t, 1000);
 })();
 
-/* ===================== PWA: install + service worker ===================== */
+/* ===================== PWA ===================== */
 let deferredPrompt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredPrompt=e; const b=$("#install"); if(b) b.style.display="block"; });
 $("#install").addEventListener("click", async () => {
