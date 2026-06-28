@@ -316,7 +316,6 @@ function renderChrome(){
   const rCls = s.r>0?"pos":s.r<0?"neg":"v";
   $("#tape").innerHTML =
     tapeItem("ACCT", fmt$0(settings.account), "v") +
-    // tapeItem("INSTR", settings.instrument+" · $"+ac.pv+"/pt", "v") +
     tapeItem("DAY P&L", s.hasClosed?fmt$(s.pnl):"—", s.hasClosed?pnlCls:"v") +
     tapeItem("DAY R", s.hasClosed?fmtR(s.r):"—", s.hasClosed?rCls:"v") +
     tapeItem("TRADES", s.used+" / "+settings.maxTrades, s.locked?"neg":"v", true);
